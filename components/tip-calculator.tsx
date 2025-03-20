@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -22,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import countriesData from "@/data/countries.json";
 import type { CountriesData } from "@/types/countries";
+import { Textarea } from "./ui/textarea";
 
 interface TipCalculatorState {
   billAmount: string;
@@ -34,6 +36,13 @@ interface TipCalculatorState {
     serviceQuality: number;
     foodQuality: number;
   };
+  experience: string;
+}
+
+interface AIRecommendation {
+  recommendedTipPercentage: number;
+  explanation: string;
+  confidence: number;
 }
 
 const serviceTypes = [
@@ -42,6 +51,7 @@ const serviceTypes = [
   "Hairstylist/Barber",
   "Taxi/Driver",
   "Hotel Room Service",
+  "Other",
 ];
 
 const predefinedTipPercentages = [10, 18, 20, 25];
@@ -58,10 +68,14 @@ export default function TipCalculator() {
       serviceQuality: 3,
       foodQuality: 3,
     },
+    experience: "",
   });
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [customTipPercentage, setCustomTipPercentage] = useState<string>("");
+  const [aiRecommendation, setAiRecommendation] =
+    useState<AIRecommendation | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const calculateTip = () => {
     const billAmount = parseFloat(state.billAmount) || 0;
@@ -79,81 +93,67 @@ export default function TipCalculator() {
     };
   };
 
-  const handleAIRecommendation = () => {
-    // Prevent recommendation if tip percentage is already set
+  const handleAIRecommendation = async () => {
     if (state.tipPercentage !== null) {
       toast.warning("Clear the tip percentage first to get a recommendation");
       setIsDialogOpen(false);
       return;
     }
 
-    if (!state.selectedCountry) {
-      toast.error("Please select a country");
+    if (!state.selectedCountry || !state.serviceType || !state.billAmount) {
+      toast.error("Please fill in all required fields");
       return;
     }
 
-    const countryData = (countriesData as CountriesData).countries[
-      state.selectedCountry
-    ];
-    if (!countryData) {
-      toast.error("Country data not found");
+    if (!state.experience.trim()) {
+      toast.error("Please describe your experience");
       return;
     }
 
-    const averageRating =
-      (state.ratings.serviceQuality + state.ratings.foodQuality) / 2;
-    let recommendedTip: number;
+    setIsLoading(true);
 
-    if (!countryData.tipping_customary) {
-      // For countries where tipping is not customary
-      if (averageRating >= 4) {
-        recommendedTip = 10; // Excellent service
-      } else if (averageRating >= 3) {
-        recommendedTip = 5; // Good service
-      } else {
-        recommendedTip = 0; // Below average service
-      }
-    } else {
-      // For countries where tipping is customary
-      const basePercentage = countryData.recommended_percentage;
+    try {
+      const response = await fetch("/api/recommend-tip", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          billAmount: parseFloat(state.billAmount),
+          serviceType: state.serviceType,
+          country: state.selectedCountry,
+          serviceQuality: state.ratings.serviceQuality,
+          foodQuality: state.ratings.foodQuality,
+          experience: state.experience,
+        }),
+      });
 
-      // Adjust tip based on rating
-      if (averageRating > 3) {
-        // Above average service
-        const increase = Math.floor(averageRating - 3); // 1 or 2
-        if (increase === 1) {
-          recommendedTip = Math.min(basePercentage + 5, 20); // +5% up to 20%
-        } else {
-          recommendedTip = Math.min(basePercentage + 10, 25); // +10% up to 25%
-        }
-      } else if (averageRating < 3) {
-        // Below average service
-        const decrease = Math.floor(3 - averageRating); // 1 or 2
-        recommendedTip = Math.max(basePercentage - decrease * 3, 5); // -3% per point, minimum 5%
-      } else {
-        // Average service (rating = 3)
-        recommendedTip = basePercentage;
-      }
-    }
+      const data = await response.json();
 
-    // Check if recommended tip matches any predefined percentage
-    if (predefinedTipPercentages.includes(recommendedTip)) {
+      if (!response.ok) throw new Error(data.error);
+
+      setAiRecommendation(data);
+
+      // Update tip percentage based on AI recommendation
       setState((prev) => ({
         ...prev,
-        tipPercentage: recommendedTip,
+        tipPercentage: data.recommendedTipPercentage,
       }));
-      setCustomTipPercentage("");
-    } else {
-      // If not, set it as custom percentage
-      setState((prev) => ({
-        ...prev,
-        tipPercentage: recommendedTip,
-      }));
-      setCustomTipPercentage(recommendedTip.toString());
-    }
 
-    toast.success(`Recommended tip: ${recommendedTip}%`);
-    setIsDialogOpen(false);
+      // Update UI to show recommended percentage
+      if (predefinedTipPercentages.includes(data.recommendedTipPercentage)) {
+        setCustomTipPercentage("");
+      } else {
+        setCustomTipPercentage(data.recommendedTipPercentage.toString());
+      }
+
+      toast.success(`AI Recommendation: ${data.recommendedTipPercentage}%`);
+      setIsDialogOpen(false);
+    } catch {
+      toast.error("Failed to get AI recommendation");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const results = calculateTip();
@@ -281,9 +281,16 @@ export default function TipCalculator() {
             Don&apos;t know how much to tip?
           </Button>
         </DialogTrigger>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent
+          className="sm:max-w-[425px]"
+          aria-describedby="dialog-description"
+        >
           <DialogHeader>
             <DialogTitle>Let us help you decide</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              Tell us about your experience and location, and we&apos;ll help
+              you calculate the appropriate tip amount.
+            </DialogDescription>
           </DialogHeader>
 
           {/* Country Selection */}
@@ -309,6 +316,22 @@ export default function TipCalculator() {
                   )}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Experience Input */}
+            <div className="space-y-2">
+              <Label>Describe your experience</Label>
+              <Textarea
+                placeholder="How was your experience? Was the service good? Any issues?"
+                value={state.experience}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                  setState((prev) => ({
+                    ...prev,
+                    experience: e.target.value,
+                  }))
+                }
+                className="min-h-[100px]"
+              />
             </div>
 
             {/* Rating Sliders */}
@@ -354,9 +377,37 @@ export default function TipCalculator() {
             </div>
           </div>
 
-          <Button onClick={handleAIRecommendation}>Get Recommendation</Button>
+          <Button onClick={handleAIRecommendation} disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <span className="animate-spin mr-2">⏳</span>
+                Getting Recommendation...
+              </>
+            ) : (
+              "Get Recommendation"
+            )}
+          </Button>
         </DialogContent>
       </Dialog>
+
+      {/* Add AI Recommendation Display */}
+      {aiRecommendation && (
+        <div className="mt-4 p-4 bg-muted/50 rounded-lg">
+          <h3 className="font-medium mb-2">AI Recommendation</h3>
+          <p className="text-sm text-muted-foreground">
+            {aiRecommendation.explanation}
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Confidence:</span>
+            <div className="h-2 w-24 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary"
+                style={{ width: `${aiRecommendation.confidence * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Results Display */}
       {state.billAmount && state.tipPercentage !== null && (
