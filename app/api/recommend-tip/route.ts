@@ -11,8 +11,51 @@ Object.entries(requiredEnvVars).forEach(([key, value]) => {
   if (!value) throw new Error(`Missing environment variable: ${key}`);
 });
 
+// Simple in-memory store for rate limiting
+// Note: This will reset on server restart and doesn't work across multiple instances
+const RATE_LIMIT_DURATION = 10 * 1000; // 10 seconds
+const MAX_REQUESTS = 10; // 10 requests per duration
+const requestStore = new Map<string, { count: number; timestamp: number }>();
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const userRequests = requestStore.get(ip);
+
+  if (!userRequests || now - userRequests.timestamp > RATE_LIMIT_DURATION) {
+    // First request or expired window
+    requestStore.set(ip, { count: 1, timestamp: now });
+    return false;
+  }
+
+  if (userRequests.count >= MAX_REQUESTS) {
+    return true;
+  }
+
+  // Increment request count
+  userRequests.count += 1;
+  return false;
+}
+
 export async function POST(req: Request) {
   try {
+    // Get client IP from request headers
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? "anonymous";
+
+    // Check rate limit
+    if (isRateLimited(ip)) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": `${RATE_LIMIT_DURATION / 1000}`,
+            "X-RateLimit-Limit": `${MAX_REQUESTS}`,
+            "X-RateLimit-Reset": `${Math.ceil(RATE_LIMIT_DURATION / 1000)}`,
+          },
+        }
+      );
+    }
+
     const data = await req.json();
     const {
       billAmount,
