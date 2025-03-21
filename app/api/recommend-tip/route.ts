@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     } = data;
 
     // Construct a detailed prompt for the AI
-    const prompt = `As an AI tip calculator, analyze the following dining experience and recommend a tip percentage.
+    const prompt = `As an AI tip calculator, analyze the following customer's experience and recommend a tip percentage.
 
 Context:
 - Country: ${country}

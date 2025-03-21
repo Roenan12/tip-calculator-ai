@@ -1,5 +1,20 @@
 "use client";
 
+/**
+ * AI-Powered Tip Calculator
+ *
+ * A modern tip calculator that combines traditional calculation features with AI recommendations.
+ * Key features:
+ * - Basic tip calculation with predefined and custom percentages
+ * - Bill splitting functionality
+ * - AI-powered tip recommendations based on:
+ *   - Service quality ratings
+ *   - Food quality ratings
+ *   - User's experience description
+ *   - Country-specific tipping customs
+ * - Real-time calculations and feedback
+ */
+
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +25,7 @@ import { AIRecommendationDialog } from "./tip-calculator/ai-recommendation-dialo
 import { ResultsDisplay } from "./tip-calculator/results-display";
 import { toast } from "sonner";
 
+// Types for managing calculator state and AI recommendations
 interface TipCalculatorState {
   billAmount: string;
   tipPercentage: number | null;
@@ -30,9 +46,11 @@ interface AIRecommendation {
   confidence: number;
 }
 
+// Common tip percentages in most regions
 const predefinedTipPercentages = [10, 18, 20, 25];
 
 export default function TipCalculator() {
+  // Main state management for the calculator
   const [state, setState] = useState<TipCalculatorState>({
     billAmount: "",
     tipPercentage: null,
@@ -47,12 +65,17 @@ export default function TipCalculator() {
     experience: "",
   });
 
+  // UI state management
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [customTipPercentage, setCustomTipPercentage] = useState<string>("");
   const [aiRecommendation, setAiRecommendation] =
     useState<AIRecommendation | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  /**
+   * Calculates tip amount, total amount, and per-person amounts
+   * Handles edge cases with default values for invalid inputs
+   */
   const calculateTip = () => {
     const billAmount = parseFloat(state.billAmount) || 0;
     const tipPercentage = state.tipPercentage || 0;
@@ -69,6 +92,13 @@ export default function TipCalculator() {
     };
   };
 
+  /**
+   * Handles AI recommendation process:
+   * 1. Validates required inputs
+   * 2. Sends request to AI endpoint
+   * 3. Updates UI with recommendation
+   * 4. Handles errors and loading states
+   */
   const handleAIRecommendation = async () => {
     if (state.tipPercentage !== null) {
       toast.warning("Clear the tip percentage first to get a recommendation");
@@ -133,6 +163,7 @@ export default function TipCalculator() {
 
   return (
     <div className="space-y-6 bg-card p-6 rounded-lg shadow-sm w-full">
+      {/* Bill amount input with validation */}
       <BillInputSection
         billAmount={state.billAmount}
         onBillAmountChange={(value) =>
@@ -140,6 +171,7 @@ export default function TipCalculator() {
         }
       />
 
+      {/* Tip percentage selection with predefined and custom options */}
       <TipPercentageSelector
         tipPercentage={state.tipPercentage}
         customTipPercentage={customTipPercentage}
@@ -149,6 +181,7 @@ export default function TipCalculator() {
         onCustomTipChange={setCustomTipPercentage}
       />
 
+      {/* Service type selection for context-aware recommendations */}
       <ServiceTypeSelector
         serviceType={state.serviceType}
         onServiceTypeChange={(value) =>
@@ -156,6 +189,7 @@ export default function TipCalculator() {
         }
       />
 
+      {/* Bill splitting functionality */}
       <div className="space-y-2">
         <Label htmlFor="splitCount">Split Bill</Label>
         <Input
@@ -170,6 +204,7 @@ export default function TipCalculator() {
         />
       </div>
 
+      {/* AI recommendation dialog with ratings and experience input */}
       <AIRecommendationDialog
         isOpen={isDialogOpen}
         onOpenChange={setIsDialogOpen}
@@ -186,6 +221,7 @@ export default function TipCalculator() {
         tipPercentage={state.tipPercentage}
       />
 
+      {/* AI recommendation display with confidence indicator */}
       {aiRecommendation && (
         <div className="mt-4 p-4 bg-muted/50 rounded-lg">
           <h3 className="font-medium mb-2">AI Recommendation</h3>
@@ -204,6 +240,7 @@ export default function TipCalculator() {
         </div>
       )}
 
+      {/* Final calculation results display */}
       <ResultsDisplay
         billAmount={state.billAmount}
         tipPercentage={state.tipPercentage}
