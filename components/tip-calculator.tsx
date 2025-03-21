@@ -24,6 +24,8 @@ import { ServiceTypeSelector } from "./tip-calculator/service-type-selector";
 import { AIRecommendationDialog } from "./tip-calculator/ai-recommendation-dialog";
 import { ResultsDisplay } from "./tip-calculator/results-display";
 import { toast } from "sonner";
+import countriesData from "@/data/countries.json";
+import type { CountriesData } from "@/types/countries";
 
 // Types for managing calculator state and AI recommendations
 interface TipCalculatorState {
@@ -116,6 +118,15 @@ export default function TipCalculator() {
       return;
     }
 
+    const countryTippingCustoms = state.selectedCountry
+      ? (countriesData as CountriesData).countries[state.selectedCountry]
+      : null;
+
+    if (!countryTippingCustoms) {
+      toast.error("Country tipping information not found");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -128,6 +139,7 @@ export default function TipCalculator() {
           billAmount: parseFloat(state.billAmount),
           serviceType: state.serviceType,
           country: state.selectedCountry,
+          countryTippingCustoms,
           serviceQuality: state.ratings.serviceQuality,
           foodQuality: state.ratings.foodQuality,
           experience: state.experience,
